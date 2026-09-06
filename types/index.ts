@@ -53,6 +53,7 @@ export interface AiInsight {
   generatedAt: string;
   model: string;
   mocked: boolean;
+  isFallback: boolean;
 }
 
 export interface MemeItem {

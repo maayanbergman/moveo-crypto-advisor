@@ -1,3 +1,7 @@
+import {
+  EXTERNAL_API_TIMEOUT_MS,
+  fetchWithTimeout,
+} from "@/lib/fetch";
 import type { NewsItem } from "@/types";
 
 const FALLBACK_NEWS: NewsItem[] = [
@@ -64,10 +68,7 @@ interface CryptoPanicResponse {
   results?: CryptoPanicPost[];
 }
 
-function prioritizeByAssets(
-  items: NewsItem[],
-  assets: string[],
-): NewsItem[] {
+function prioritizeByAssets(items: NewsItem[], assets: string[]): NewsItem[] {
   if (assets.length === 0) return items;
   const preferred = new Set(assets.map((a) => a.toUpperCase()));
   return [...items].sort((a, b) => {
@@ -81,17 +82,22 @@ function prioritizeByAssets(
   });
 }
 
+function fallbackResult(assets: string[]) {
+  return {
+    news: prioritizeByAssets(FALLBACK_NEWS, assets).slice(0, 8),
+    source: "fallback" as const,
+    isFallback: true as const,
+  };
+}
+
 export async function fetchCryptoNews(
   assets: string[],
-): Promise<{ news: NewsItem[]; source: "live" | "fallback" }> {
+): Promise<{ news: NewsItem[]; source: "live" | "fallback"; isFallback: boolean }> {
   const apiKey = process.env.CRYPTOPANIC_API_KEY;
   const currencies = assets.join(",").toLowerCase();
 
   if (!apiKey) {
-    return {
-      news: prioritizeByAssets(FALLBACK_NEWS, assets).slice(0, 8),
-      source: "fallback",
-    };
+    return fallbackResult(assets);
   }
 
   const url = new URL("https://cryptopanic.com/api/v1/posts/");
@@ -103,7 +109,8 @@ export async function fetchCryptoNews(
   }
 
   try {
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithTimeout(url.toString(), {
+      timeoutMs: EXTERNAL_API_TIMEOUT_MS,
       next: { revalidate: 60 },
       headers: { Accept: "application/json" },
     });
@@ -129,11 +136,9 @@ export async function fetchCryptoNews(
     return {
       news: prioritizeByAssets(news, assets),
       source: "live",
+      isFallback: false,
     };
   } catch {
-    return {
-      news: prioritizeByAssets(FALLBACK_NEWS, assets).slice(0, 8),
-      source: "fallback",
-    };
+    return fallbackResult(assets);
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   CONTENT_TYPES,
@@ -9,7 +9,12 @@ import {
   INVESTOR_TYPES,
 } from "@/lib/constants";
 import { preferencesSchema } from "@/lib/validations";
-import type { ContentType, CryptoAsset, InvestorType } from "@/types";
+import type {
+  ContentType,
+  CryptoAsset,
+  InvestorType,
+  UserPreferenceData,
+} from "@/types";
 
 function toggleValue<T extends string>(list: T[], value: T): T[] {
   return list.includes(value)
@@ -17,28 +22,75 @@ function toggleValue<T extends string>(list: T[], value: T): T[] {
     : [...list, value];
 }
 
-export function OnboardingQuiz() {
+interface OnboardingQuizProps {
+  initialPreference?: UserPreferenceData | null;
+}
+
+export function OnboardingQuiz({
+  initialPreference = null,
+}: OnboardingQuizProps) {
   const router = useRouter();
+  const [isPendingNav, startTransition] = useTransition();
   const [step, setStep] = useState(0);
-  const [assets, setAssets] = useState<CryptoAsset[]>(["BTC", "ETH"]);
-  const [investorType, setInvestorType] = useState<InvestorType>("HODLer");
-  const [contentTypes, setContentTypes] = useState<ContentType[]>([
-    "Market News",
-    "Charts/Prices",
-  ]);
+  const [assets, setAssets] = useState<CryptoAsset[]>(
+    () => initialPreference?.assets ?? [],
+  );
+  const [investorType, setInvestorType] = useState<InvestorType | null>(
+    () => initialPreference?.investorType ?? null,
+  );
+  const [contentTypes, setContentTypes] = useState<ContentType[]>(
+    () => initialPreference?.contentTypes ?? [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const isEditing = Boolean(initialPreference);
+  const busy = pending || isPendingNav;
+
   const canContinue = useMemo(() => {
     if (step === 0) return assets.length > 0;
-    if (step === 1) return Boolean(investorType);
+    if (step === 1) return investorType !== null;
     return contentTypes.length > 0;
   }, [assets, contentTypes, investorType, step]);
 
-  async function finish() {
-    if (pending) return;
-    setError(null);
+  function stepErrorMessage(currentStep: number): string | null {
+    if (currentStep === 0 && assets.length === 0) {
+      return "Select at least one asset to continue.";
+    }
+    if (currentStep === 1 && investorType === null) {
+      return "Select an investor type to continue.";
+    }
+    if (currentStep === 2 && contentTypes.length === 0) {
+      return "Select at least one content type to continue.";
+    }
+    return null;
+  }
 
+  function goBack() {
+    setError(null);
+    setStep((s) => Math.max(0, s - 1));
+  }
+
+  function goNext() {
+    const message = stepErrorMessage(step);
+    if (message) {
+      setError(message);
+      return;
+    }
+    setError(null);
+    setStep((s) => Math.min(2, s + 1));
+  }
+
+  async function finish() {
+    if (busy) return;
+
+    const message = stepErrorMessage(2);
+    if (message) {
+      setError(message);
+      return;
+    }
+
+    setError(null);
     const parsed = preferencesSchema.safeParse({
       assets,
       investorType,
@@ -60,8 +112,10 @@ export function OnboardingQuiz() {
       if (!response.ok) {
         throw new Error(data.error ?? "Could not save preferences");
       }
-      router.push("/dashboard");
-      router.refresh();
+      startTransition(() => {
+        router.push("/dashboard");
+        router.refresh();
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
       setPending(false);
@@ -78,14 +132,16 @@ export function OnboardingQuiz() {
   return (
     <div
       className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950/80 p-6 md:p-8"
-      aria-busy={pending}
+      aria-busy={busy}
     >
       <div className="mb-6">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-400">
-          Onboarding
+          {isEditing ? "Preferences" : "Onboarding"}
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-50 md:text-3xl">
-          Personalize your daily desk
+          {isEditing
+            ? "Update your daily desk"
+            : "Personalize your daily desk"}
         </h1>
         <p className="mt-2 text-sm text-slate-400" id="onboarding-step-label">
           Step {step + 1} of 3 — we use this to rank news, prices, and AI
@@ -107,7 +163,7 @@ export function OnboardingQuiz() {
       </div>
 
       {step === 0 && (
-        <fieldset disabled={pending} className="border-0 p-0">
+        <fieldset disabled={busy} className="border-0 p-0">
           <legend className="text-lg font-medium text-slate-100">
             Which assets interest you?
           </legend>
@@ -120,9 +176,10 @@ export function OnboardingQuiz() {
                   type="button"
                   aria-pressed={active}
                   aria-label={`${asset.name} (${asset.symbol})`}
-                  onClick={() =>
-                    setAssets((prev) => toggleValue(prev, asset.symbol))
-                  }
+                  onClick={() => {
+                    setError(null);
+                    setAssets((prev) => toggleValue(prev, asset.symbol));
+                  }}
                   className={choiceButtonClass(active)}
                 >
                   <div className="text-sm font-semibold">{asset.symbol}</div>
@@ -135,11 +192,15 @@ export function OnboardingQuiz() {
       )}
 
       {step === 1 && (
-        <fieldset disabled={pending} className="border-0 p-0">
+        <fieldset disabled={busy} className="border-0 p-0">
           <legend className="text-lg font-medium text-slate-100">
             What kind of investor are you?
           </legend>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Investor type">
+          <div
+            className="mt-4 grid gap-3 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label="Investor type"
+          >
             {INVESTOR_TYPES.map((type) => {
               const active = investorType === type;
               return (
@@ -148,7 +209,10 @@ export function OnboardingQuiz() {
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  onClick={() => setInvestorType(type)}
+                  onClick={() => {
+                    setError(null);
+                    setInvestorType(type);
+                  }}
                   className={`rounded-lg border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${
                     active
                       ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-100"
@@ -164,7 +228,7 @@ export function OnboardingQuiz() {
       )}
 
       {step === 2 && (
-        <fieldset disabled={pending} className="border-0 p-0">
+        <fieldset disabled={busy} className="border-0 p-0">
           <legend className="text-lg font-medium text-slate-100">
             Preferred content types?
           </legend>
@@ -176,9 +240,10 @@ export function OnboardingQuiz() {
                   key={type}
                   type="button"
                   aria-pressed={active}
-                  onClick={() =>
-                    setContentTypes((prev) => toggleValue(prev, type))
-                  }
+                  onClick={() => {
+                    setError(null);
+                    setContentTypes((prev) => toggleValue(prev, type));
+                  }}
                   className={`rounded-lg border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${
                     active
                       ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-100"
@@ -202,8 +267,8 @@ export function OnboardingQuiz() {
       <div className="mt-8 flex items-center justify-between gap-3">
         <button
           type="button"
-          disabled={step === 0 || pending}
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          disabled={step === 0 || busy}
+          onClick={goBack}
           className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:opacity-40"
         >
           Back
@@ -211,8 +276,8 @@ export function OnboardingQuiz() {
         {step < 2 ? (
           <button
             type="button"
-            disabled={!canContinue || pending}
-            onClick={() => setStep((s) => s + 1)}
+            disabled={!canContinue || busy}
+            onClick={goNext}
             className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-40"
           >
             Continue
@@ -220,13 +285,19 @@ export function OnboardingQuiz() {
         ) : (
           <button
             type="button"
-            disabled={!canContinue || pending}
+            disabled={!canContinue || busy}
             onClick={finish}
-            aria-disabled={!canContinue || pending}
+            aria-disabled={!canContinue || busy}
             className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {pending && <Spinner className="h-4 w-4" label="Saving preferences" />}
-            {pending ? "Saving..." : "Go to dashboard"}
+            {busy && (
+              <Spinner className="h-4 w-4" label="Saving preferences" />
+            )}
+            {busy
+              ? "Saving..."
+              : isEditing
+                ? "Save & return"
+                : "Go to dashboard"}
           </button>
         )}
       </div>

@@ -25,7 +25,9 @@ export const preferencesSchema = z.object({
     .array(z.enum(assetSymbols))
     .min(1, "Select at least one asset")
     .max(8),
-  investorType: z.enum(investorTypes),
+  investorType: z.enum(investorTypes, {
+    error: "Select an investor type",
+  }),
   contentTypes: z
     .array(z.enum(contentTypes))
     .min(1, "Select at least one content type"),

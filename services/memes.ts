@@ -1,3 +1,7 @@
+import {
+  EXTERNAL_API_TIMEOUT_MS,
+  fetchWithTimeout,
+} from "@/lib/fetch";
 import type { MemeItem } from "@/types";
 
 const STATIC_MEMES: MemeItem[] = [
@@ -66,11 +70,13 @@ function pickDaily<T>(items: T[]): T {
 export async function fetchCryptoMeme(): Promise<{
   meme: MemeItem;
   source: "reddit" | "fallback";
+  isFallback: boolean;
 }> {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       "https://www.reddit.com/r/CryptoCurrencies/hot.json?limit=30",
       {
+        timeoutMs: EXTERNAL_API_TIMEOUT_MS,
         headers: {
           Accept: "application/json",
           "User-Agent": "moveo-crypto-advisor/1.0",
@@ -108,8 +114,16 @@ export async function fetchCryptoMeme(): Promise<{
       throw new Error("No image posts found");
     }
 
-    return { meme: pickDaily(memes), source: "reddit" };
+    return {
+      meme: pickDaily(memes),
+      source: "reddit",
+      isFallback: false,
+    };
   } catch {
-    return { meme: pickDaily(STATIC_MEMES), source: "fallback" };
+    return {
+      meme: pickDaily(STATIC_MEMES),
+      source: "fallback",
+      isFallback: true,
+    };
   }
 }

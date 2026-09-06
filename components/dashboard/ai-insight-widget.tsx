@@ -41,7 +41,13 @@ export async function AiInsightWidget({
       <SectionCard
         title="AI Insight of the Day"
         subtitle="Actionable analysis tailored to your investor profile"
-        badge={insight.mocked ? "Mock LLM" : "LLM"}
+        badge={insight.isFallback ? "Simulated Data" : "LLM"}
+        isFallback={insight.isFallback}
+        badgeTitle={
+          insight.isFallback
+            ? "Mock playbook — LLM unavailable or timed out"
+            : "Live model-generated insight"
+        }
       >
         <div className="rounded-lg border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4">
           <div className="flex items-center gap-2 text-cyan-300">

@@ -1,4 +1,8 @@
 import { ASSET_BY_SYMBOL, CRYPTO_ASSETS } from "@/lib/constants";
+import {
+  EXTERNAL_API_TIMEOUT_MS,
+  fetchWithTimeout,
+} from "@/lib/fetch";
 import type { CoinPrice, CryptoAsset } from "@/types";
 
 type CoinGeckoSimplePrice = Record<
@@ -40,7 +44,7 @@ function mapPrices(
 
 export async function fetchCoinPrices(
   assets: CryptoAsset[],
-): Promise<{ prices: CoinPrice[]; source: "live" | "fallback" }> {
+): Promise<{ prices: CoinPrice[]; source: "live" | "fallback"; isFallback: boolean }> {
   const symbols =
     assets.length > 0
       ? assets
@@ -50,7 +54,8 @@ export async function fetchCoinPrices(
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
+      timeoutMs: EXTERNAL_API_TIMEOUT_MS,
       next: { revalidate: 60 },
       headers: { Accept: "application/json" },
     });
@@ -60,11 +65,16 @@ export async function fetchCoinPrices(
     }
 
     const data = (await response.json()) as CoinGeckoSimplePrice;
-    return { prices: mapPrices(symbols, data), source: "live" };
+    return {
+      prices: mapPrices(symbols, data),
+      source: "live",
+      isFallback: false,
+    };
   } catch {
     return {
       prices: mapPrices(symbols, FALLBACK_PRICES),
       source: "fallback",
+      isFallback: true,
     };
   }
 }

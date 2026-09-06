@@ -5,14 +5,20 @@ import { fetchCryptoMeme } from "@/services/memes";
 
 export async function MemeWidget() {
   try {
-    const { meme, source } = await fetchCryptoMeme();
+    const { meme, isFallback } = await fetchCryptoMeme();
     const altText = `Crypto meme: ${meme.title}`;
 
     return (
       <SectionCard
         title="Fun Crypto Meme"
         subtitle="A daily dose of market culture"
-        badge={source === "reddit" ? "Reddit" : "Fallback"}
+        badge={isFallback ? "Offline Mode" : "Reddit"}
+        isFallback={isFallback}
+        badgeTitle={
+          isFallback
+            ? "Simulated meme — Reddit feed unavailable or timed out"
+            : "Live Reddit crypto meme"
+        }
       >
         <div>
           <p className="mb-3 text-sm font-medium text-slate-200">{meme.title}</p>

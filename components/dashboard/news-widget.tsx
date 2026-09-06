@@ -11,14 +11,20 @@ interface NewsWidgetProps {
 
 export async function NewsWidget({ assets }: NewsWidgetProps) {
   try {
-    const { news, source } = await fetchCryptoNews(assets);
+    const { news, isFallback } = await fetchCryptoNews(assets);
     const assetLabel = assets.join(", ");
 
     return (
       <SectionCard
         title="Market News"
         subtitle="Curated headlines prioritized by your assets"
-        badge={source === "live" ? "Live" : "Fallback"}
+        badge={isFallback ? "Offline Mode" : "Live"}
+        isFallback={isFallback}
+        badgeTitle={
+          isFallback
+            ? "Simulated headlines — live news feed unavailable or timed out"
+            : "Live CryptoPanic headlines"
+        }
       >
         {news.length === 0 ? (
           <EmptyState

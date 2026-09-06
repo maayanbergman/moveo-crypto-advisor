@@ -34,6 +34,11 @@ export function VoteButtons({ section, itemId }: VoteButtonsProps) {
       });
       if (!response.ok) {
         const data = (await response.json()) as { error?: string };
+        if (response.status === 409) {
+          // Already voted today — keep optimistic lock, treat as success
+          setStatus("Already recorded for today");
+          return;
+        }
         throw new Error(data.error ?? "Vote failed");
       }
     } catch (err) {

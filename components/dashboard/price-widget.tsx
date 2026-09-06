@@ -11,13 +11,19 @@ interface PriceWidgetProps {
 
 export async function PriceWidget({ assets }: PriceWidgetProps) {
   try {
-    const { prices, source } = await fetchCoinPrices(assets);
+    const { prices, isFallback } = await fetchCoinPrices(assets);
 
     return (
       <SectionCard
         title="Coin Prices"
         subtitle="Live quotes for your selected assets"
-        badge={source === "live" ? "Live" : "Fallback"}
+        badge={isFallback ? "Offline Mode" : "Live"}
+        isFallback={isFallback}
+        badgeTitle={
+          isFallback
+            ? "Simulated prices — CoinGecko unavailable or timed out"
+            : "Live CoinGecko quotes"
+        }
       >
         {prices.length === 0 ? (
           <EmptyState
