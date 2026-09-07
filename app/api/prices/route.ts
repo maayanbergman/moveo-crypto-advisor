@@ -1,13 +1,13 @@
 import { jsonError, jsonOk, requireAuthUser } from "@/lib/api";
+import {
+  API_ERROR_MESSAGES,
+  DEFAULT_WATCHLIST,
+} from "@/lib/constants";
+import { logger } from "@/lib/logger";
 import { parseAssets } from "@/lib/preferences";
 import { fetchCoinPrices } from "@/services/coingecko";
 import type { CryptoAsset } from "@/types";
 
-/**
- * Optional API for clients. Dashboard widgets call services directly
- * with preference props to avoid N+1 preference lookups.
- * Accepts `?assets=BTC,ETH` so callers need not re-query UserPreference.
- */
 export async function GET(request: Request) {
   const auth = await requireAuthUser();
   if ("response" in auth) return auth.response;
@@ -18,14 +18,14 @@ export async function GET(request: Request) {
     const assets: CryptoAsset[] =
       rawAssets && rawAssets.length > 0
         ? parseAssets(rawAssets.split(",").map((s) => s.trim().toUpperCase()))
-        : (["BTC", "ETH", "SOL", "ADA"] as CryptoAsset[]);
+        : DEFAULT_WATCHLIST;
 
     const result = await fetchCoinPrices(
-      assets.length > 0 ? assets : (["BTC", "ETH"] as CryptoAsset[]),
+      assets.length > 0 ? assets : DEFAULT_WATCHLIST,
     );
     return jsonOk(result);
   } catch (error) {
-    console.error("prices error", error);
-    return jsonError("Unable to load prices", 500);
+    logger.error("api.prices.get", error, { userId: auth.user.id });
+    return jsonError(API_ERROR_MESSAGES.pricesFailed, 500);
   }
 }

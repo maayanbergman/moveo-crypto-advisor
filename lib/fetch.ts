@@ -31,5 +31,7 @@ export async function fetchWithTimeout(
   }
 }
 
-export const EXTERNAL_API_TIMEOUT_MS = 5_000;
-export const AI_API_TIMEOUT_MS = 8_000;
+export {
+  AI_API_TIMEOUT_MS,
+  EXTERNAL_API_TIMEOUT_MS,
+} from "@/lib/constants";

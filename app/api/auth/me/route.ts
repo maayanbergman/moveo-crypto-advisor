@@ -1,19 +1,18 @@
 import { jsonError, jsonOk, requireAuthUser } from "@/lib/api";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
 import { toUserPreferenceData } from "@/lib/preferences";
-import { prisma } from "@/lib/prisma";
+import { findUserById } from "@/lib/services/users";
 
 export async function GET() {
   const auth = await requireAuthUser();
   if ("response" in auth) return auth.response;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: auth.user.id },
-      include: { preference: true },
-    });
+    const user = await findUserById(auth.user.id);
 
     if (!user) {
-      return jsonError("User not found", 404);
+      return jsonError(API_ERROR_MESSAGES.userNotFound, 404);
     }
 
     return jsonOk({
@@ -23,7 +22,7 @@ export async function GET() {
         : null,
     });
   } catch (error) {
-    console.error("me error", error);
-    return jsonError("Unable to load session", 500);
+    logger.error("api.auth.me", error, { userId: auth.user.id });
+    return jsonError(API_ERROR_MESSAGES.sessionLoadFailed, 500);
   }
 }

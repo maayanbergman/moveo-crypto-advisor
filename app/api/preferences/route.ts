@@ -1,6 +1,10 @@
 import { jsonError, jsonOk, requireAuthUser } from "@/lib/api";
-import { toUserPreferenceData } from "@/lib/preferences";
-import { prisma } from "@/lib/prisma";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
+import {
+  getTypedPreferenceByUserId,
+  upsertPreference,
+} from "@/lib/services/preferences";
 import { preferencesSchema } from "@/lib/validations";
 
 export async function GET() {
@@ -8,18 +12,11 @@ export async function GET() {
   if ("response" in auth) return auth.response;
 
   try {
-    const preference = await prisma.userPreference.findUnique({
-      where: { userId: auth.user.id },
-    });
-
-    if (!preference) {
-      return jsonOk({ preference: null });
-    }
-
-    return jsonOk({ preference: toUserPreferenceData(preference) });
+    const preference = await getTypedPreferenceByUserId(auth.user.id);
+    return jsonOk({ preference });
   } catch (error) {
-    console.error("preferences GET error", error);
-    return jsonError("Unable to load preferences", 500);
+    logger.error("api.preferences.get", error, { userId: auth.user.id });
+    return jsonError(API_ERROR_MESSAGES.preferencesLoadFailed, 500);
   }
 }
 
@@ -38,24 +35,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const preference = await prisma.userPreference.upsert({
-      where: { userId: auth.user.id },
-      create: {
-        userId: auth.user.id,
-        assets: parsed.data.assets,
-        investorType: parsed.data.investorType,
-        contentTypes: parsed.data.contentTypes,
-      },
-      update: {
-        assets: parsed.data.assets,
-        investorType: parsed.data.investorType,
-        contentTypes: parsed.data.contentTypes,
-      },
+    const preference = await upsertPreference({
+      userId: auth.user.id,
+      assets: parsed.data.assets as typeof parsed.data.assets,
+      investorType: parsed.data.investorType as typeof parsed.data.investorType,
+      contentTypes: parsed.data.contentTypes as typeof parsed.data.contentTypes,
     });
 
-    return jsonOk({ preference: toUserPreferenceData(preference) });
+    return jsonOk({ preference });
   } catch (error) {
-    console.error("preferences POST error", error);
-    return jsonError("Unable to save preferences", 500);
+    logger.error("api.preferences.post", error, { userId: auth.user.id });
+    return jsonError(API_ERROR_MESSAGES.preferencesSaveFailed, 500);
   }
 }

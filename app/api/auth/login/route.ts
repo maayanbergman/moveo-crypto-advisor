@@ -1,11 +1,13 @@
 import { createToken, setAuthCookie, verifyPassword } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
+import { findUserByEmail } from "@/lib/services/users";
 import { loginSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
     const parsed = loginSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -16,13 +18,10 @@ export async function POST(request: Request) {
     }
 
     const { email, password } = parsed.data;
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { preference: true },
-    });
+    const user = await findUserByEmail(email);
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
-      return jsonError("Invalid email or password", 401);
+      return jsonError(API_ERROR_MESSAGES.invalidCredentials, 401);
     }
 
     const token = await createToken({
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
     setAuthCookie(response, token);
     return response;
   } catch (error) {
-    console.error("login error", error);
-    return jsonError("Unable to login right now", 500);
+    logger.error("api.auth.login", error);
+    return jsonError(API_ERROR_MESSAGES.loginFailed, 500);
   }
 }

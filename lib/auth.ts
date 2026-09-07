@@ -2,21 +2,27 @@ import { compare, hash } from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME, JWT_EXPIRES_IN } from "@/lib/constants";
+import {
+  AUTH_COOKIE_MAX_AGE_SECONDS,
+  AUTH_COOKIE_NAME,
+  BCRYPT_SALT_ROUNDS,
+  JWT_EXPIRES_IN,
+  JWT_SECRET_MIN_LENGTH,
+} from "@/lib/constants";
 import type { AuthUser, SessionPayload } from "@/types";
-
-const SALT_ROUNDS = 12;
 
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error("JWT_SECRET must be set to a secure value (16+ chars)");
+  if (!secret || secret.length < JWT_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `JWT_SECRET must be set to a secure value (${JWT_SECRET_MIN_LENGTH}+ chars)`,
+    );
   }
   return new TextEncoder().encode(secret);
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return hash(password, SALT_ROUNDS);
+  return hash(password, BCRYPT_SALT_ROUNDS);
 }
 
 export async function verifyPassword(
@@ -66,7 +72,7 @@ export function setAuthCookie(response: NextResponse, token: string): void {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: AUTH_COOKIE_MAX_AGE_SECONDS,
   });
 }
 

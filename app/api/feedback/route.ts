@@ -1,18 +1,11 @@
 import { jsonCreated, jsonError, requireAuthUser } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
+import {
+  createFeedback,
+  findFeedbackToday,
+} from "@/lib/services/feedback";
 import { feedbackSchema } from "@/lib/validations";
-
-function startOfUtcDay(date = new Date()): Date {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-  );
-}
-
-function startOfNextUtcDay(date = new Date()): Date {
-  const start = startOfUtcDay(date);
-  start.setUTCDate(start.getUTCDate() + 1);
-  return start;
-}
 
 export async function POST(request: Request) {
   const auth = await requireAuthUser();
@@ -30,33 +23,21 @@ export async function POST(request: Request) {
     }
 
     const itemId = parsed.data.itemId ?? null;
-    const dayStart = startOfUtcDay();
-    const dayEnd = startOfNextUtcDay();
-
-    const existing = await prisma.feedback.findFirst({
-      where: {
-        userId: auth.user.id,
-        section: parsed.data.section,
-        itemId,
-        timestamp: {
-          gte: dayStart,
-          lt: dayEnd,
-        },
-      },
-      select: { id: true },
+    const existing = await findFeedbackToday({
+      userId: auth.user.id,
+      section: parsed.data.section,
+      itemId,
     });
 
     if (existing) {
-      return jsonError("You already voted on this item today", 409);
+      return jsonError(API_ERROR_MESSAGES.feedbackDuplicate, 409);
     }
 
-    const feedback = await prisma.feedback.create({
-      data: {
-        userId: auth.user.id,
-        section: parsed.data.section,
-        rating: parsed.data.rating,
-        itemId: parsed.data.itemId,
-      },
+    const feedback = await createFeedback({
+      userId: auth.user.id,
+      section: parsed.data.section,
+      rating: parsed.data.rating,
+      itemId: parsed.data.itemId,
     });
 
     return jsonCreated({
@@ -69,7 +50,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("feedback error", error);
-    return jsonError("Unable to save feedback", 500);
+    logger.error("api.feedback.post", error, { userId: auth.user.id });
+    return jsonError(API_ERROR_MESSAGES.feedbackFailed, 500);
   }
 }

@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
 import { createToken, hashPassword, setAuthCookie } from "@/lib/auth";
 import { jsonCreated, jsonError } from "@/lib/api";
-import { prisma } from "@/lib/prisma";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
+import { createUser, findUserByEmail } from "@/lib/services/users";
 import { registerSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
     const parsed = registerSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -17,15 +18,13 @@ export async function POST(request: Request) {
     }
 
     const { name, email, password } = parsed.data;
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await findUserByEmail(email);
     if (existing) {
-      return jsonError("An account with this email already exists", 409);
+      return jsonError(API_ERROR_MESSAGES.emailTaken, 409);
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: { name, email, passwordHash },
-    });
+    const user = await createUser({ name, email, passwordHash });
 
     const token = await createToken({
       userId: user.id,
@@ -40,7 +39,7 @@ export async function POST(request: Request) {
     setAuthCookie(response, token);
     return response;
   } catch (error) {
-    console.error("register error", error);
-    return jsonError("Unable to register right now", 500);
+    logger.error("api.auth.register", error);
+    return jsonError(API_ERROR_MESSAGES.registerFailed, 500);
   }
 }

@@ -1,9 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/constants";
+import { AUTH_COOKIE_NAME, SECURITY_HEADERS } from "@/lib/constants";
 import { verifyToken } from "@/lib/auth";
 
 const protectedPrefixes = ["/dashboard", "/onboarding"];
 const authPages = ["/login", "/register"];
+
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  for (const header of SECURITY_HEADERS) {
+    response.headers.set(header.key, header.value);
+  }
+  return response;
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,14 +27,16 @@ export async function proxy(request: NextRequest) {
   if (isProtected && !session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
   if (isAuthPage && session) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/dashboard", request.url)),
+    );
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {

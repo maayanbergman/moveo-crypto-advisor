@@ -4,7 +4,14 @@ import type {
   InvestorType,
   UserPreferenceData,
 } from "@/types";
-import { CONTENT_TYPES, CRYPTO_ASSETS, INVESTOR_TYPES } from "@/lib/constants";
+import {
+  CONTENT_TYPES,
+  CRYPTO_ASSETS,
+  DEFAULT_CONTENT_TYPES,
+  DEFAULT_INVESTOR_TYPE,
+  DEFAULT_NEWS_ASSETS,
+  INVESTOR_TYPES,
+} from "@/lib/constants";
 
 const ASSET_SET = new Set<string>(CRYPTO_ASSETS.map((a) => a.symbol));
 const INVESTOR_SET = new Set<string>(INVESTOR_TYPES);
@@ -35,16 +42,14 @@ export function toUserPreferenceData(input: {
   const assets = parseAssets(input.assets);
   const investorType = isInvestorType(input.investorType)
     ? input.investorType
-    : "HODLer";
+    : DEFAULT_INVESTOR_TYPE;
   const contentTypes = input.contentTypes.filter(isContentType);
 
   return {
-    assets: assets.length > 0 ? assets : (["BTC", "ETH"] as CryptoAsset[]),
+    assets: assets.length > 0 ? assets : DEFAULT_NEWS_ASSETS,
     investorType,
     contentTypes:
-      contentTypes.length > 0
-        ? contentTypes
-        : (["Market News", "Charts/Prices"] as ContentType[]),
+      contentTypes.length > 0 ? contentTypes : DEFAULT_CONTENT_TYPES,
     updatedAt: input.updatedAt?.toISOString(),
   };
 }

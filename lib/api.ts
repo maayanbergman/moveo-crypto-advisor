@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionFromCookies, toAuthUser } from "@/lib/auth";
+import { API_ERROR_MESSAGES } from "@/lib/constants";
 import type { AuthUser } from "@/types";
 
 export function jsonOk<T>(data: T, init?: ResponseInit) {
@@ -19,7 +20,7 @@ export async function requireAuthUser(): Promise<
 > {
   const session = await getSessionFromCookies();
   if (!session) {
-    return { response: jsonError("Unauthorized", 401) };
+    return { response: jsonError(API_ERROR_MESSAGES.unauthorized, 401) };
   }
   return { user: toAuthUser(session) };
 }

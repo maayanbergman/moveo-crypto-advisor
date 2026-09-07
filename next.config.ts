@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { SECURITY_HEADERS } from "@/lib/constants";
 
 const nextConfig: NextConfig = {
   images: {
@@ -9,6 +10,14 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "preview.redd.it" },
       { protocol: "https", hostname: "**.redditmedia.com" },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: SECURITY_HEADERS,
+      },
+    ];
   },
 };
 
